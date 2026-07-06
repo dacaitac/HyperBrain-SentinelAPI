@@ -244,8 +244,10 @@ actor EventKitService {
         let calendars = store.calendars(for: .event)
         guard !calendars.isEmpty else { return [] }
         let now = Date()
-        let start = Calendar.current.date(byAdding: .month, value: -1, to: now) ?? now
-        let end = Calendar.current.date(byAdding: .month, value: 3, to: now) ?? now
+        // Apple recommends keeping the window under 4 years. 2 years back / 2 years forward
+        // covers the full productive horizon for a personal productivity system.
+        let start = Calendar.current.date(byAdding: .year, value: -2, to: now) ?? now
+        let end = Calendar.current.date(byAdding: .year, value: 2, to: now) ?? now
         let predicate = store.predicateForEvents(withStart: start, end: end, calendars: calendars)
         return store.events(matching: predicate)
     }

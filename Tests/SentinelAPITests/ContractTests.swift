@@ -32,13 +32,51 @@ struct ContractTests {
         #expect(string.contains("\"relative_offset\":-600"))
     }
 
+    @Test("CalendarEvent event serializes with snake_case keys and CALENDAR_EVENT entity type")
+    func calendarEventEnvelope() throws {
+        let payload = CalendarEventPayload(
+            title: "Sprint Review",
+            startTime: Date(timeIntervalSince1970: 1_752_300_000),
+            endTime: Date(timeIntervalSince1970: 1_752_303_600),
+            allDay: false,
+            notes: "Demo completed work",
+            url: nil,
+            recurrence: nil,
+            calendarId: "cal-work",
+            calendarName: "Work",
+            location: "Room 101",
+            alarms: [AlarmPayload(absoluteDate: nil, relativeOffset: -900, proximity: .none, location: nil)]
+        )
+        let event = AppleEntityChangedEvent(
+            entityType: .calendarEvent, entityId: "evt-1", operation: .updated, payload: .calendarEvent(payload)
+        )
+        let string = try json(event)
+
+        #expect(string.contains("\"schema_version\":\"1\""))
+        #expect(string.contains("\"source_system\":\"APPLE\""))
+        #expect(string.contains("\"entity_type\":\"CALENDAR_EVENT\""))
+        #expect(string.contains("\"operation\":\"UPDATED\""))
+        #expect(string.contains("\"start_time\""))
+        #expect(string.contains("\"end_time\""))
+        #expect(string.contains("\"all_day\":false"))
+        #expect(string.contains("\"calendar_id\":\"cal-work\""))
+        #expect(string.contains("\"calendar_name\":\"Work\""))
+        #expect(string.contains("\"relative_offset\":-900"))
+    }
+
     @Test("Envelope round-trips for every entity type")
     func roundTrip() throws {
         let calendarPayload = CalendarPayload(title: "Work", sourceName: "iCloud", color: "#FF0000", isDefault: true)
+        let eventPayload = CalendarEventPayload(
+            title: "Standup", startTime: Date(timeIntervalSince1970: 1_752_300_000),
+            endTime: Date(timeIntervalSince1970: 1_752_301_800), allDay: false, notes: nil,
+            url: nil, recurrence: nil, calendarId: "c1", calendarName: "Work", location: nil, alarms: []
+        )
         let cases: [AppleEntityChangedEvent] = [
             AppleEntityChangedEvent(entityType: .calendar, entityId: "cal-1", operation: .updated, payload: .calendar(calendarPayload)),
             AppleEntityChangedEvent(entityType: .reminderList, entityId: "list-1", operation: .created, payload: .calendar(calendarPayload)),
             AppleEntityChangedEvent(entityType: .reminder, entityId: "rem-1", operation: .deleted, payload: nil),
+            AppleEntityChangedEvent(entityType: .calendarEvent, entityId: "evt-1", operation: .created, payload: .calendarEvent(eventPayload)),
         ]
         for original in cases {
             let data = try encoder.encode(original)
@@ -77,6 +115,36 @@ struct ContractTests {
             #expect(payload.title == "From core")
         } else {
             Issue.record("expected reminder payload")
+        }
+    }
+
+    @Test("WriteCommand decodes CALENDAR_EVENT by command_type discriminator")
+    func writeCommandCalendarEventDecodes() throws {
+        let body = """
+        {
+          "command_id": "3F2504E0-4F89-41D3-9A0C-0305E82C3302",
+          "command_type": "CALENDAR_EVENT",
+          "operation": "CREATED",
+          "payload": {
+            "title": "Sprint Review",
+            "start_time": "2026-07-07T10:00:00Z",
+            "end_time": "2026-07-07T11:00:00Z",
+            "all_day": false,
+            "calendar_id": "cal-work",
+            "calendar_name": "Work",
+            "alarms": []
+          }
+        }
+        """
+        let command = try decoder.decode(WriteCommand.self, from: Data(body.utf8))
+        #expect(command.commandType == .calendarEvent)
+        #expect(command.operation == .created)
+        if case .calendarEvent(let payload) = command.payload {
+            #expect(payload.title == "Sprint Review")
+            #expect(payload.calendarName == "Work")
+            #expect(payload.allDay == false)
+        } else {
+            Issue.record("expected calendarEvent payload")
         }
     }
 

@@ -4,7 +4,7 @@ import Logging
 /// Observes EventKit, diffs against the persisted snapshot and publishes each real change to
 /// `sync-events.fifo`. Replaces the legacy `sentinel-daemon` webhook loop.
 actor ChangeMonitor {
-    private let eventKit: EventKitService
+    private let eventKit: any EventKitOperations
     private let snapshotStore: SnapshotStore
     private let publisher: any EventPublisher
     private let loopGuard: LoopGuard
@@ -13,7 +13,7 @@ actor ChangeMonitor {
     private var task: Task<Void, Never>?
 
     init(
-        eventKit: EventKitService,
+        eventKit: any EventKitOperations,
         snapshotStore: SnapshotStore,
         publisher: any EventPublisher,
         loopGuard: LoopGuard,

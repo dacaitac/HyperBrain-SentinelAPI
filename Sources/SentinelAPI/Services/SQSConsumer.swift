@@ -11,13 +11,13 @@ import Logging
 actor SQSConsumer {
     private let client: SQSClient
     private let queueURL: String
-    private let eventKit: EventKitService
+    private let eventKit: any EventKitOperations
     private let loopGuard: LoopGuard
     private let decoder = JSONCoding.makeDecoder()
     private let logger: Logger
     private var task: Task<Void, Never>?
 
-    init(region: String, queueURL: String, eventKit: EventKitService, loopGuard: LoopGuard, logger: Logger) async throws {
+    init(region: String, queueURL: String, eventKit: any EventKitOperations, loopGuard: LoopGuard, logger: Logger) async throws {
         self.client = SQSClient(config: try await SQSClient.SQSClientConfig(region: region))
         self.queueURL = queueURL
         self.eventKit = eventKit

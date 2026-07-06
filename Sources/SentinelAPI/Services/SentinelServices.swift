@@ -2,7 +2,7 @@ import Vapor
 
 /// Holds the long-lived actors that make up SentinelAPI, wired together at boot.
 struct SentinelServices: Sendable {
-    let eventKit: EventKitService
+    let eventKit: any EventKitOperations
     let snapshotStore: SnapshotStore
     let publisher: any EventPublisher
     /// Nil in local-test mode (no AWS): the Core → Apple command consumer is disabled.
