@@ -72,10 +72,12 @@ private struct SentinelLifecycle: LifecycleHandler {
         try await services.eventKit.requestAccess()
         await services.consumer?.start()
         await services.monitor.start()
-        if services.consumer == nil {
+        if AppConfiguration.isLocalTest() {
             application.logger.info("SentinelAPI started (local test): monitoring EventKit, logging changes")
+        } else if services.consumer == nil {
+            application.logger.info("SentinelAPI started: monitoring EventKit, publishing to SQS (apple-commands consumer disabled)")
         } else {
-            application.logger.info("SentinelAPI started: monitoring EventKit and consuming apple-commands.fifo")
+            application.logger.info("SentinelAPI started: monitoring EventKit, publishing to SQS and consuming apple-commands.fifo")
         }
     }
 

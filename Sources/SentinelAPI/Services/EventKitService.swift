@@ -161,7 +161,10 @@ actor EventKitService {
     func createCalendar(_ payload: CalendarPayload, entityType: EKEntityType) throws -> String {
         let calendar = EKCalendar(for: entityType, eventStore: store)
         calendar.title = payload.title
-        calendar.source = source(named: payload.sourceName) ?? store.defaultCalendarForNewReminders()?.source
+        guard let source = source(named: payload.sourceName, supporting: entityType) else {
+            throw EventKitError.noDefaultCalendar
+        }
+        calendar.source = source
         try store.saveCalendar(calendar, commit: true)
         return calendar.calendarIdentifier
     }
@@ -249,7 +252,18 @@ actor EventKitService {
         let start = Calendar.current.date(byAdding: .year, value: -2, to: now) ?? now
         let end = Calendar.current.date(byAdding: .year, value: 2, to: now) ?? now
         let predicate = store.predicateForEvents(withStart: start, end: end, calendars: calendars)
-        return store.events(matching: predicate)
+        // `events(matching:)` expands recurring events into one EKEvent per occurrence, all
+        // sharing the same identifier. Keep only the earliest occurrence per identifier so
+        // the snapshot stays stable — otherwise the diff flip-flops between occurrence
+        // payloads and re-publishes UPDATED events forever.
+        let occurrences = store.events(matching: predicate).sorted { $0.startDate < $1.startDate }
+        return Self.firstPerIdentifier(occurrences) { $0.eventIdentifier ?? $0.calendarItemIdentifier }
+    }
+
+    /// Keeps the first element per identifier, preserving order.
+    static func firstPerIdentifier<T>(_ items: [T], id: (T) -> String) -> [T] {
+        var seen = Set<String>()
+        return items.filter { seen.insert(id($0)).inserted }
     }
 
     private func reminderCalendar(id: String) throws -> EKCalendar {
@@ -264,8 +278,15 @@ actor EventKitService {
         return fallback
     }
 
-    private func source(named name: String) -> EKSource? {
-        store.sources.first { $0.title == name }
+    private func source(named name: String, supporting entityType: EKEntityType) -> EKSource? {
+        // Only sources already hosting calendars of the requested type are guaranteed to
+        // support it — e.g. a CalDAV "iCloud" source for events rejects reminder lists
+        // (EKErrorDomain code 24). Several sources can share the same title.
+        let capable = store.sources.filter { !$0.calendars(for: entityType).isEmpty }
+        let defaultSource = entityType == .reminder
+            ? store.defaultCalendarForNewReminders()?.source
+            : store.defaultCalendarForNewEvents?.source
+        return capable.first { $0.title == name } ?? defaultSource ?? capable.first
     }
 
     func defaultReminderCalendarIdentifier() -> String? {
