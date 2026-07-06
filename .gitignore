@@ -40,3 +40,8 @@ sentinel-sqs-key.txt
 
 # Test results
 *.xcresult
+
+# Local dev helpers (never commit — may contain account-specific URLs/creds)
+run-local-publish.sh
+*sqs-key*.txt
+.env

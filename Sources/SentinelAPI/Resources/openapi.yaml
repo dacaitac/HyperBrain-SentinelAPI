@@ -1,0 +1,335 @@
+openapi: 3.0.3
+info:
+  title: HyperBrain SentinelAPI
+  version: 1.0.0
+  description: >-
+    REST bridge over Apple EventKit (iCloud Reminders / Calendar) running on the Mac Mini.
+    CRUD over reminders, calendar events, reminder lists and calendars (with nested alarms and
+    location). Tailscale-only (RNF-09). operationIds are stable and descriptive so this contract
+    can be wired to an AI function-calling integration. Wire format: snake_case keys, ISO-8601
+    timestamps with offset. Mirrors the SQS contract in HyperBrain-docs events-v1.yaml.
+servers:
+  - url: http://mac-mini.tailnet.ts.net:8080
+    description: SentinelAPI over Tailscale (hostname, never a raw IP)
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Service healthcheck.
+      responses:
+        "200": { description: Service is up }
+  /openapi.yaml:
+    get:
+      operationId: getOpenAPISpec
+      summary: This OpenAPI contract.
+      responses:
+        "200": { description: OpenAPI document }
+  /snapshot:
+    get:
+      operationId: getSnapshot
+      summary: Current local snapshot of all Apple entities (debug).
+      responses:
+        "200":
+          description: Snapshot
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SnapshotResponse" }
+  /resync:
+    post:
+      operationId: resyncFromEventKit
+      summary: Rebuild the baseline snapshot from EventKit and publish any drift.
+      responses:
+        "202": { description: Resync accepted }
+  /reminders:
+    get:
+      operationId: listReminders
+      summary: List all reminders.
+      responses:
+        "200":
+          description: Reminders
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/IdentifiedReminder" }
+    post:
+      operationId: createReminder
+      summary: Create a reminder.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReminderPayload" }
+      responses:
+        "200":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IdResponse" }
+  /reminders/{id}:
+    put:
+      operationId: updateReminder
+      summary: Update a reminder by EventKit identifier.
+      parameters: [{ $ref: "#/components/parameters/EntityId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReminderPayload" }
+      responses:
+        "200": { description: Updated }
+        "404": { description: Not found }
+    delete:
+      operationId: deleteReminder
+      summary: Delete a reminder by EventKit identifier.
+      parameters: [{ $ref: "#/components/parameters/EntityId" }]
+      responses:
+        "204": { description: Deleted }
+        "404": { description: Not found }
+  /events:
+    get:
+      operationId: listEvents
+      summary: List calendar events in the active window.
+      responses:
+        "200":
+          description: Events
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/IdentifiedEvent" }
+    post:
+      operationId: createEvent
+      summary: Create a calendar event.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CalendarEventPayload" }
+      responses:
+        "200":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IdResponse" }
+  /events/{id}:
+    put:
+      operationId: updateEvent
+      summary: Update a calendar event by EventKit identifier.
+      parameters: [{ $ref: "#/components/parameters/EntityId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CalendarEventPayload" }
+      responses:
+        "200": { description: Updated }
+        "404": { description: Not found }
+    delete:
+      operationId: deleteEvent
+      summary: Delete a calendar event by EventKit identifier.
+      parameters: [{ $ref: "#/components/parameters/EntityId" }]
+      responses:
+        "204": { description: Deleted }
+        "404": { description: Not found }
+  /reminder-lists:
+    get:
+      operationId: listReminderLists
+      summary: List reminder lists (EKCalendar of type reminder).
+      responses:
+        "200":
+          description: Reminder lists
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/IdentifiedCalendar" }
+    post:
+      operationId: createReminderList
+      summary: Create a reminder list.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CalendarPayload" }
+      responses:
+        "200":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IdResponse" }
+  /reminder-lists/{id}:
+    put:
+      operationId: updateReminderList
+      summary: Update a reminder list.
+      parameters: [{ $ref: "#/components/parameters/EntityId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CalendarPayload" }
+      responses:
+        "200": { description: Updated }
+        "404": { description: Not found }
+    delete:
+      operationId: deleteReminderList
+      summary: Delete a reminder list.
+      parameters: [{ $ref: "#/components/parameters/EntityId" }]
+      responses:
+        "204": { description: Deleted }
+        "404": { description: Not found }
+  /calendars:
+    get:
+      operationId: listCalendars
+      summary: List calendars (EKCalendar of type event).
+      responses:
+        "200":
+          description: Calendars
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/IdentifiedCalendar" }
+    post:
+      operationId: createCalendar
+      summary: Create a calendar.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CalendarPayload" }
+      responses:
+        "200":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IdResponse" }
+  /calendars/{id}:
+    put:
+      operationId: updateCalendar
+      summary: Update a calendar.
+      parameters: [{ $ref: "#/components/parameters/EntityId" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CalendarPayload" }
+      responses:
+        "200": { description: Updated }
+        "404": { description: Not found }
+    delete:
+      operationId: deleteCalendar
+      summary: Delete a calendar.
+      parameters: [{ $ref: "#/components/parameters/EntityId" }]
+      responses:
+        "204": { description: Deleted }
+        "404": { description: Not found }
+components:
+  parameters:
+    EntityId:
+      name: id
+      in: path
+      required: true
+      description: EventKit identifier of the entity.
+      schema: { type: string }
+  schemas:
+    IdResponse:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string, description: EventKit identifier of the affected entity }
+    LocationPayload:
+      type: object
+      required: [title, latitude, longitude, radius]
+      properties:
+        title: { type: string }
+        latitude: { type: number, format: double }
+        longitude: { type: number, format: double }
+        radius: { type: number, format: double, description: Geofence radius in meters }
+    AlarmPayload:
+      type: object
+      required: [proximity]
+      properties:
+        absolute_date: { type: string, format: date-time, nullable: true }
+        relative_offset: { type: integer, nullable: true, description: Offset in seconds relative to the entity date }
+        proximity: { type: string, enum: [none, enter, leave] }
+        location:
+          allOf: [{ $ref: "#/components/schemas/LocationPayload" }]
+          nullable: true
+    ReminderPayload:
+      type: object
+      required: [title, completed, priority, list_id, list_name, alarms]
+      properties:
+        title: { type: string }
+        notes: { type: string, nullable: true }
+        due_date: { type: string, format: date-time, nullable: true }
+        completed: { type: boolean }
+        priority: { type: integer, description: "0 (none), 1, 5 or 9" }
+        url: { type: string, nullable: true }
+        recurrence: { type: string, nullable: true, enum: [daily, weekly, monthly, yearly] }
+        list_id: { type: string, description: EKCalendar identifier of the list }
+        list_name: { type: string }
+        location:
+          allOf: [{ $ref: "#/components/schemas/LocationPayload" }]
+          nullable: true
+        alarms:
+          type: array
+          items: { $ref: "#/components/schemas/AlarmPayload" }
+    CalendarEventPayload:
+      type: object
+      required: [title, start_time, all_day, calendar_id, calendar_name, alarms]
+      properties:
+        title: { type: string }
+        start_time: { type: string, format: date-time }
+        end_time: { type: string, format: date-time, nullable: true }
+        all_day: { type: boolean }
+        notes: { type: string, nullable: true }
+        url: { type: string, nullable: true }
+        recurrence: { type: string, nullable: true, enum: [daily, weekly, monthly, yearly] }
+        calendar_id: { type: string, description: EKCalendar identifier }
+        calendar_name: { type: string }
+        location: { type: string, nullable: true }
+        alarms:
+          type: array
+          items: { $ref: "#/components/schemas/AlarmPayload" }
+    CalendarPayload:
+      type: object
+      required: [title, source_name, is_default]
+      properties:
+        title: { type: string }
+        source_name: { type: string, description: EKSource title (e.g. iCloud) }
+        color: { type: string, nullable: true, description: Hex color "#RRGGBB" }
+        is_default: { type: boolean }
+    IdentifiedReminder:
+      type: object
+      required: [id, payload]
+      properties:
+        id: { type: string }
+        payload: { $ref: "#/components/schemas/ReminderPayload" }
+    IdentifiedEvent:
+      type: object
+      required: [id, payload]
+      properties:
+        id: { type: string }
+        payload: { $ref: "#/components/schemas/CalendarEventPayload" }
+    IdentifiedCalendar:
+      type: object
+      required: [id, payload]
+      properties:
+        id: { type: string }
+        payload: { $ref: "#/components/schemas/CalendarPayload" }
+    SnapshotResponse:
+      type: object
+      properties:
+        reminders:
+          type: array
+          items: { $ref: "#/components/schemas/IdentifiedReminder" }
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/IdentifiedEvent" }
+        reminder_lists:
+          type: array
+          items: { $ref: "#/components/schemas/IdentifiedCalendar" }
+        calendars:
+          type: array
+          items: { $ref: "#/components/schemas/IdentifiedCalendar" }

@@ -6,8 +6,13 @@ struct SentinelAPIApp {
         var env = try Environment.detect()
         try LoggingSystem.bootstrap(from: &env)
         let app = try await Application.make(env)
-        defer { app.shutdown() }
-        try configure(app)
+        do {
+            try await configure(app)
+        } catch {
+            try? await app.asyncShutdown()
+            throw error
+        }
         try await app.execute()
+        try await app.asyncShutdown()
     }
 }

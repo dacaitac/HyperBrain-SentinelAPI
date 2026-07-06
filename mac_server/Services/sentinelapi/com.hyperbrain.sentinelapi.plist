@@ -17,17 +17,16 @@
 
     <key>EnvironmentVariables</key>
     <dict>
-        <!-- AWS credentials for event-sentinel-api-sqs IAM user -->
-        <!-- Temporary: load from ~/sentinel-sqs-key.txt until SOPS migration (TD-03) -->
-        <key>AWS_ACCESS_KEY_ID</key>
-        <string>REPLACE_WITH_KEY_ID</string>
-        <key>AWS_SECRET_ACCESS_KEY</key>
-        <string>REPLACE_WITH_SECRET</string>
+        <!-- AWS credentials for the event-sentinel-api-sqs IAM user are read from the macOS
+             keychain at startup (service com.hyperbrain.sentinelapi) — NEVER put them here. -->
         <key>AWS_REGION</key>
         <string>us-east-1</string>
-        <!-- Full URL of sync-events.fifo SQS queue (provisioned in HyperBrain #26) -->
-        <key>QUEUE_URL</key>
-        <string>REPLACE_WITH_QUEUE_URL</string>
+        <!-- Full URL of sync-events.fifo (outbound Apple -> Core), provisioned in #26 -->
+        <key>SYNC_EVENTS_QUEUE_URL</key>
+        <string>REPLACE_WITH_SYNC_EVENTS_QUEUE_URL</string>
+        <!-- Full URL of apple-commands.fifo (inbound Core -> Apple), provisioned in TD-03 -->
+        <key>APPLE_COMMANDS_QUEUE_URL</key>
+        <string>REPLACE_WITH_APPLE_COMMANDS_QUEUE_URL</string>
         <!-- Tailscale hostname of Mac Mini — never use IP (can change) -->
         <key>SENTINEL_API_BASE_URL</key>
         <string>REPLACE_WITH_TAILSCALE_HOSTNAME</string>

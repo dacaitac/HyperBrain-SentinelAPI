@@ -16,6 +16,9 @@ let package = Package(
                 .product(name: "AWSSQS", package: "aws-sdk-swift"),
             ],
             path: "Sources/SentinelAPI",
+            resources: [
+                .copy("Resources/openapi.yaml"),
+            ],
             swiftSettings: [
                 .enableExperimentalFeature("StrictConcurrency"),
             ]
