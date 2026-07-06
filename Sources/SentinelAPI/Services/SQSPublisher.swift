@@ -1,4 +1,5 @@
 import AWSSQS
+import CryptoKit
 import Foundation
 
 /// Publishes `AppleEntityChangedEvent`s to `sync-events.fifo` (Apple → Core).
@@ -20,9 +21,18 @@ actor SQSPublisher {
         let input = SendMessageInput(
             messageBody: body,
             messageDeduplicationId: event.eventId.uuidString,
-            messageGroupId: event.entityId,
+            messageGroupId: groupId(for: event.entityId),
             queueUrl: queueURL
         )
         _ = try await client.sendMessage(input: input)
+    }
+
+    /// SQS FIFO MessageGroupId max = 128 chars. Some EventKit identifiers (Exchange/Outlook)
+    /// produce composite IDs like `<calendarUUID>:<96-char-hex>` that exceed this limit.
+    /// Hash with SHA-256 (64 hex chars) when needed — deterministic, preserves per-entity ordering.
+    private func groupId(for entityId: String) -> String {
+        guard entityId.count > 128 else { return entityId }
+        return SHA256.hash(data: Data(entityId.utf8))
+            .compactMap { String(format: "%02x", $0) }.joined()
     }
 }
