@@ -24,9 +24,12 @@
         <!-- Full URL of sync-events.fifo (outbound Apple -> Core), provisioned in #26 -->
         <key>SYNC_EVENTS_QUEUE_URL</key>
         <string>REPLACE_WITH_SYNC_EVENTS_QUEUE_URL</string>
-        <!-- Full URL of apple-commands.fifo (inbound Core -> Apple), provisioned in TD-03 -->
+        <!-- Full URL of apple-commands.fifo (inbound Core -> Apple), provisioned in HU-09c #37 -->
         <key>APPLE_COMMANDS_QUEUE_URL</key>
         <string>REPLACE_WITH_APPLE_COMMANDS_QUEUE_URL</string>
+        <!-- Full URL of apple-commands-results.fifo (outbound results, ADR-010) -->
+        <key>APPLE_COMMANDS_RESULTS_QUEUE_URL</key>
+        <string>REPLACE_WITH_APPLE_COMMANDS_RESULTS_QUEUE_URL</string>
         <!-- Tailscale hostname of Mac Mini — never use IP (can change) -->
         <key>SENTINEL_API_BASE_URL</key>
         <string>REPLACE_WITH_TAILSCALE_HOSTNAME</string>

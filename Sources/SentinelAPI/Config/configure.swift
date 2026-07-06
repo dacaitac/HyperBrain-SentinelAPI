@@ -32,6 +32,7 @@ func configure(_ app: Application) async throws {
             consumer = try await SQSConsumer(
                 region: config.awsRegion,
                 queueURL: config.appleCommandsQueueURL,
+                resultsQueueURL: config.appleCommandsResultsQueueURL,
                 eventKit: eventKit,
                 loopGuard: loopGuard,
                 logger: app.logger

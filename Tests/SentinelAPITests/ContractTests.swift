@@ -7,8 +7,8 @@ struct ContractTests {
     private let encoder = JSONCoding.makeEncoder()
     private let decoder = JSONCoding.makeDecoder()
 
-    private func json(_ event: AppleEntityChangedEvent) throws -> String {
-        String(decoding: try encoder.encode(event), as: UTF8.self)
+    private func json(_ value: some Encodable) throws -> String {
+        String(decoding: try encoder.encode(value), as: UTF8.self)
     }
 
     @Test("Reminder event serializes with snake_case keys and APPLE source")
@@ -146,6 +146,65 @@ struct ContractTests {
         } else {
             Issue.record("expected calendarEvent payload")
         }
+    }
+
+    @Test("WriteCommand from the Core decodes with null entity_id and empty list_id")
+    func writeCommandFromCoreDecodes() throws {
+        // Exact shape emitted by the Core's WriteCommandWireMapper (HU-09c).
+        let body = """
+        {
+          "command_id": "3F2504E0-4F89-41D3-9A0C-0305E82C3303",
+          "command_type": "REMINDER",
+          "operation": "CREATED",
+          "entity_id": null,
+          "payload": {
+            "title": "Agenda item", "notes": null, "due_date": "2026-07-07T09:00:00Z",
+            "completed": false, "priority": 0, "url": null, "recurrence": null,
+            "list_id": "", "list_name": "HyperBrain", "location": null, "alarms": []
+          }
+        }
+        """
+        let command = try decoder.decode(WriteCommand.self, from: Data(body.utf8))
+        #expect(command.entityId == nil)
+        if case .reminder(let payload) = command.payload {
+            #expect(payload.listId.isEmpty)
+            #expect(payload.alarms.isEmpty)
+        } else {
+            Issue.record("expected reminder payload")
+        }
+    }
+
+    @Test("WriteCommandResult encodes the ADR-010 wire contract")
+    func writeCommandResultEncodes() throws {
+        let result = WriteCommandResult(
+            commandId: UUID(uuidString: "3F2504E0-4F89-41D3-9A0C-0305E82C3304")!,
+            status: .applied,
+            operation: .created,
+            entityId: "EK-123",
+            appliedAt: Date(timeIntervalSince1970: 1_720_000_000)
+        )
+        let string = try json(result)
+        #expect(string.contains("\"schema_version\":\"1\""))
+        #expect(string.contains("\"command_id\":\"3F2504E0-4F89-41D3-9A0C-0305E82C3304\""))
+        #expect(string.contains("\"status\":\"APPLIED\""))
+        #expect(string.contains("\"operation\":\"CREATED\""))
+        #expect(string.contains("\"entity_id\":\"EK-123\""))
+        #expect(string.contains("applied_at"))
+    }
+
+    @Test("FAILED WriteCommandResult carries the error and a null entity_id")
+    func failedWriteCommandResultEncodes() throws {
+        let result = WriteCommandResult(
+            commandId: UUID(),
+            status: .failed,
+            operation: .updated,
+            entityId: nil,
+            error: "No EventKit item with identifier 'x'"
+        )
+        let string = try json(result)
+        #expect(string.contains("\"status\":\"FAILED\""))
+        #expect(string.contains("\"error\":\"No EventKit item with identifier 'x'\""))
+        #expect(!string.contains("\"entity_id\":\"")) // nil is omitted or null, never a value
     }
 
     @Test("ISO-8601 timestamps keep an explicit offset")

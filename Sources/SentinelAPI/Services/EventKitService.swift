@@ -98,7 +98,7 @@ actor EventKitService {
     @discardableResult
     func createReminder(_ payload: ReminderPayload) throws -> String {
         let reminder = EKReminder(eventStore: store)
-        reminder.calendar = try reminderCalendar(id: payload.listId)
+        reminder.calendar = try reminderCalendar(id: payload.listId, name: payload.listName)
         apply(payload, to: reminder)
         try store.save(reminder, commit: true)
         return reminder.calendarItemIdentifier
@@ -128,7 +128,7 @@ actor EventKitService {
     @discardableResult
     func createEvent(_ payload: CalendarEventPayload) throws -> String {
         let event = EKEvent(eventStore: store)
-        event.calendar = try eventCalendar(id: payload.calendarId)
+        event.calendar = try eventCalendar(id: payload.calendarId, name: payload.calendarName)
         apply(payload, to: event)
         try store.save(event, span: .thisEvent, commit: true)
         return event.eventIdentifier ?? event.calendarItemIdentifier
@@ -266,16 +266,25 @@ actor EventKitService {
         return items.filter { seen.insert(id($0)).inserted }
     }
 
-    private func reminderCalendar(id: String) throws -> EKCalendar {
+    // Write commands from the Core carry no EventKit list/calendar identifier (HU-09c) —
+    // resolution falls through: identifier, then title match, then the default calendar.
+    private func reminderCalendar(id: String, name: String? = nil) throws -> EKCalendar {
         if let calendar = store.calendar(withIdentifier: id) { return calendar }
+        if let byName = calendar(named: name, for: .reminder) { return byName }
         guard let fallback = store.defaultCalendarForNewReminders() else { throw EventKitError.noDefaultCalendar }
         return fallback
     }
 
-    private func eventCalendar(id: String) throws -> EKCalendar {
+    private func eventCalendar(id: String, name: String? = nil) throws -> EKCalendar {
         if let calendar = store.calendar(withIdentifier: id) { return calendar }
+        if let byName = calendar(named: name, for: .event) { return byName }
         guard let fallback = store.defaultCalendarForNewEvents else { throw EventKitError.noDefaultCalendar }
         return fallback
+    }
+
+    private func calendar(named name: String?, for entityType: EKEntityType) -> EKCalendar? {
+        guard let name, !name.isEmpty else { return nil }
+        return store.calendars(for: entityType).first { $0.title == name && $0.allowsContentModifications }
     }
 
     private func source(named name: String, supporting entityType: EKEntityType) -> EKSource? {

@@ -10,6 +10,8 @@ struct AppConfiguration: Sendable {
     let syncEventsQueueURL: String
     /// `apple-commands.fifo` — inbound Core → Apple write commands.
     let appleCommandsQueueURL: String
+    /// `apple-commands-results.fifo` — outbound write-command results (ADR-010).
+    let appleCommandsResultsQueueURL: String
     /// Tailscale hostname base URL the Core uses to reach the REST API (never a raw IP).
     let baseURL: String
     let credentials: AWSCredentials
@@ -66,15 +68,19 @@ struct AppConfiguration: Sendable {
             throw ConfigurationError.missingEnv("AWS_SECRET_ACCESS_KEY (keychain or env)")
         }
 
-        // apple-commands.fifo is only needed when the command consumer runs.
+        // The command queues are only needed when the command consumer runs.
         let appleCommandsQueueURL = isConsumerEnabled(environment)
             ? try require("APPLE_COMMANDS_QUEUE_URL")
             : (environment["APPLE_COMMANDS_QUEUE_URL"] ?? "")
+        let appleCommandsResultsQueueURL = isConsumerEnabled(environment)
+            ? try require("APPLE_COMMANDS_RESULTS_QUEUE_URL")
+            : (environment["APPLE_COMMANDS_RESULTS_QUEUE_URL"] ?? "")
 
         return AppConfiguration(
             awsRegion: (environment["AWS_REGION"]).flatMap { $0.isEmpty ? nil : $0 } ?? "us-east-1",
             syncEventsQueueURL: try require("SYNC_EVENTS_QUEUE_URL"),
             appleCommandsQueueURL: appleCommandsQueueURL,
+            appleCommandsResultsQueueURL: appleCommandsResultsQueueURL,
             baseURL: (environment["SENTINEL_API_BASE_URL"]).flatMap { $0.isEmpty ? nil : $0 } ?? "http://localhost:8080",
             credentials: AWSCredentials(accessKeyID: accessKeyID, secretAccessKey: secretAccessKey)
         )
