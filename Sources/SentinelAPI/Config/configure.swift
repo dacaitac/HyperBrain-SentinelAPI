@@ -4,6 +4,21 @@ import Vapor
 /// Boots SentinelAPI: registers the wire coders, loads config + credentials, builds the
 /// EventKit/SQS actors and starts the change monitor and command consumer.
 func configure(_ app: Application) async throws {
+    // RNF-09: the REST API must only be reachable over the tailnet — never bind 0.0.0.0.
+    // At login the LaunchAgent can start before tailscaled brings the interface up, so retry
+    // briefly before degrading to loopback (SQS keeps working either way).
+    var bind = BindAddress.resolve()
+    for _ in 0..<5 where bind.isFallback && !AppConfiguration.isLocalTest() {
+        try await Task.sleep(for: .seconds(2))
+        bind = BindAddress.resolve()
+    }
+    app.http.server.configuration.hostname = bind.hostname
+    if bind.isFallback && !AppConfiguration.isLocalTest() {
+        app.logger.warning("Tailscale interface not found — REST API bound to loopback only (set SENTINEL_HOSTNAME to override)")
+    } else {
+        app.logger.info("REST API binding to \(bind.hostname)")
+    }
+
     // REST bodies use the same snake_case + ISO-8601 contract as the SQS messages.
     ContentConfiguration.global.use(encoder: JSONCoding.makeEncoder(), for: .json)
     ContentConfiguration.global.use(decoder: JSONCoding.makeDecoder(), for: .json)

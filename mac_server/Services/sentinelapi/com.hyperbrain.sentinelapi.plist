@@ -33,6 +33,10 @@
         <!-- Tailscale hostname of Mac Mini — never use IP (can change) -->
         <key>SENTINEL_API_BASE_URL</key>
         <string>REPLACE_WITH_TAILSCALE_HOSTNAME</string>
+        <!-- Optional: force the REST bind address. By default the binary binds to the
+             Tailscale interface (100.64.0.0/10) and degrades to loopback when it is down
+             (RNF-09) — never pass "serve --hostname 0.0.0.0". -->
+        <!-- <key>SENTINEL_HOSTNAME</key><string>100.x.y.z</string> -->
     </dict>
 
     <key>KeepAlive</key>
