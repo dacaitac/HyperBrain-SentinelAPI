@@ -90,8 +90,12 @@ extension EventKitService {
         reminder.priority = payload.priority
         reminder.url = payload.url.flatMap(URL.init(string:))
         if let dueDate = payload.dueDate {
-            reminder.dueDateComponents = Calendar.current.dateComponents(
-                [.year, .month, .day, .hour, .minute], from: dueDate)
+            // All-day (date-only) is derived from the absence of a time-of-day: a due at local
+            // midnight carries only [year, month, day] so the reminder does not alert at 00:00.
+            let fields: Set<Calendar.Component> = Self.isDateOnly(dueDate)
+                ? [.year, .month, .day]
+                : [.year, .month, .day, .hour, .minute]
+            reminder.dueDateComponents = Calendar.current.dateComponents(fields, from: dueDate)
         } else {
             reminder.dueDateComponents = nil
         }
@@ -103,12 +107,23 @@ extension EventKitService {
         event.title = payload.title
         event.startDate = payload.startTime
         event.endDate = payload.endTime ?? payload.startTime
+        // All-day is derived from the times when the Core does not set it explicitly: start (and
+        // end, if any) on local midnight means a date-only event with no meaningful time-of-day.
         event.isAllDay = payload.allDay
+            || (Self.isDateOnly(payload.startTime)
+                && (payload.endTime.map(Self.isDateOnly) ?? true))
         event.notes = payload.notes
         event.location = payload.location
         event.url = payload.url.flatMap(URL.init(string:))
         applyRecurrence(payload.recurrence, to: event)
         event.alarms = buildAlarms(payload.alarms)
+    }
+
+    /// Whether a date falls exactly on local midnight — the signal for an all-day / date-only
+    /// item, since the Core anchors date-only values (no time-of-day) to midnight.
+    static func isDateOnly(_ date: Date) -> Bool {
+        let time = Calendar.current.dateComponents([.hour, .minute, .second], from: date)
+        return time.hour == 0 && time.minute == 0 && time.second == 0
     }
 
     private func buildAlarms(_ payloads: [AlarmPayload]) -> [EKAlarm] {

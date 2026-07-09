@@ -39,4 +39,17 @@ struct EventKitServiceTests {
         let deduped = EventKitService.firstPerIdentifier(items) { $0.id }
         #expect(deduped.map(\.id) == ["a", "b"])
     }
+
+    @Test("isDateOnly flags only local midnight — the all-day / date-only signal")
+    func detectsDateOnly() {
+        let calendar = Calendar.current
+        let midnight = calendar.startOfDay(for: Date(timeIntervalSince1970: 1_800_000_000))
+        #expect(EventKitService.isDateOnly(midnight))
+
+        let nineSharp = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: midnight)!
+        #expect(!EventKitService.isDateOnly(nineSharp))
+
+        let nineThirty = calendar.date(bySettingHour: 9, minute: 30, second: 0, of: midnight)!
+        #expect(!EventKitService.isDateOnly(nineThirty))
+    }
 }
