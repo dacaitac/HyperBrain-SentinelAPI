@@ -100,7 +100,10 @@ extension EventKitService {
             reminder.dueDateComponents = nil
         }
         applyRecurrence(payload.recurrence, to: reminder)
-        reminder.alarms = buildAlarms(payload.alarms)
+        // EventKit never derives an alarm from the due date, so without one a reminder is silent.
+        // Attach a default alarm so it notifies (and plays the system sound): at the due time when
+        // timed, or at the default hour of the day for date-only reminders (never at midnight).
+        reminder.alarms = defaultAlarms(explicit: payload.alarms, dueDate: payload.dueDate)
     }
 
     func apply(_ payload: CalendarEventPayload, to event: EKEvent) {
@@ -116,7 +119,9 @@ extension EventKitService {
         event.location = payload.location
         event.url = payload.url.flatMap(URL.init(string:))
         applyRecurrence(payload.recurrence, to: event)
-        event.alarms = buildAlarms(payload.alarms)
+        // As with reminders, an event needs an explicit alarm to notify. Attach a default one at the
+        // start time, or at the default hour for all-day events (rather than midnight).
+        event.alarms = defaultAlarms(explicit: payload.alarms, dueDate: payload.startTime, allDay: event.isAllDay)
     }
 
     /// Whether a date falls exactly on local midnight — the signal for an all-day / date-only
@@ -124,6 +129,27 @@ extension EventKitService {
     static func isDateOnly(_ date: Date) -> Bool {
         let time = Calendar.current.dateComponents([.hour, .minute, .second], from: date)
         return time.hour == 0 && time.minute == 0 && time.second == 0
+    }
+
+    /// Default notification hour (seconds past local midnight) for date-only / all-day items, so they
+    /// alert at a sensible time instead of 00:00. Matches Apple's own all-day default (09:00).
+    private static let defaultAllDayAlarmOffset: TimeInterval = 9 * 3600
+
+    /// Resolves the alarms to write. Explicit payload alarms win; otherwise a single default alarm is
+    /// synthesized so the item notifies (and plays the system sound): at the due/start time when it
+    /// carries a time-of-day, or at ``defaultAllDayAlarmOffset`` for date-only / all-day items. An
+    /// item without any date gets no alarm.
+    ///
+    /// - Parameters:
+    ///   - explicit: alarms carried in the payload (currently the Core sends none).
+    ///   - dueDate:  the reminder due date or event start; nil means no date and thus no alarm.
+    ///   - allDay:   forces the all-day branch (used for events whose all-day flag is set explicitly).
+    private func defaultAlarms(explicit: [AlarmPayload], dueDate: Date?, allDay: Bool = false) -> [EKAlarm] {
+        guard explicit.isEmpty else { return buildAlarms(explicit) }
+        guard let dueDate else { return [] }
+        let isAllDay = allDay || Self.isDateOnly(dueDate)
+        let offset = isAllDay ? Self.defaultAllDayAlarmOffset : 0
+        return [EKAlarm(relativeOffset: offset)]
     }
 
     private func buildAlarms(_ payloads: [AlarmPayload]) -> [EKAlarm] {
