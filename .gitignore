@@ -45,3 +45,7 @@ sentinel-sqs-key.txt
 run-local-publish.sh
 *sqs-key*.txt
 .env
+
+# Claude Code — commit settings.json + hooks/; ignore local overrides and runtime marker (ADR-017)
+.claude/settings.local.json
+.claude/.build-passed
