@@ -7,6 +7,25 @@ func registerRoutes(_ app: Application, _ services: SentinelServices) throws {
 
     let eventKit = services.eventKit
     let monitor = services.monitor
+    let commandPublisher = services.commandPublisher
+
+    // MARK: User commands (HU-01b — iOS Shortcut → user-commands.fifo → Core)
+
+    app.post("commands", "replan-agenda") { req -> Response in
+        let command = UserCommand.replanAgenda()
+        try await commandPublisher.publish(command)
+        return try accepted(command, for: req)
+    }
+    app.post("commands", "sleep-score") { req -> Response in
+        let body = try req.content.decode(SleepScoreRequest.self)
+        guard UserCommand.sleepScoreRange.contains(body.score) else {
+            throw Abort(.badRequest, reason: "score must be an integer between 0 and 100")
+        }
+        // The contract date is derived server-side (today in the Mac Mini timezone).
+        let command = UserCommand.sleepScore(body.score)
+        try await commandPublisher.publish(command)
+        return try accepted(command, for: req)
+    }
 
     // MARK: Snapshot / resync
 
@@ -99,6 +118,13 @@ struct SnapshotResponse: Content {
     let events: [Identified<CalendarEventPayload>]
     let reminderLists: [Identified<CalendarPayload>]
     let calendars: [Identified<CalendarPayload>]
+}
+
+/// `202 Accepted` + `{ "command_id": "<uuid>" }` for a published user command.
+private func accepted(_ command: UserCommand, for req: Request) throws -> Response {
+    let response = Response(status: .accepted)
+    try response.content.encode(CommandAcceptedResponse(commandId: command.commandId))
+    return response
 }
 
 private func openAPIResponse(_ req: Request) throws -> Response {

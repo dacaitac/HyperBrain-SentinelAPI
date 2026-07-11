@@ -12,6 +12,8 @@ struct AppConfiguration: Sendable {
     let appleCommandsQueueURL: String
     /// `apple-commands-results.fifo` — outbound write-command results (ADR-010).
     let appleCommandsResultsQueueURL: String
+    /// `user-commands.fifo` — outbound user commands, iOS Shortcut → Core (HU-01b).
+    let userCommandsQueueURL: String
     /// Tailscale hostname base URL the Core uses to reach the REST API (never a raw IP).
     let baseURL: String
     let credentials: AWSCredentials
@@ -48,7 +50,12 @@ struct AppConfiguration: Sendable {
     /// Builds configuration from the process environment + keychain.
     /// Credentials fall back to `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` env vars only when
     /// the keychain item is absent (local bootstrap); production reads exclusively from the keychain.
-    static func load(environment: [String: String] = ProcessInfo.processInfo.environment) throws -> AppConfiguration {
+    /// `readKeychain` is injectable so unit tests never touch the real keychain (on a dev machine
+    /// `SecItemCopyMatching` can block on an authorization prompt for the unsigned test binary).
+    static func load(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        readKeychain: (String) throws -> String = Keychain.readString(account:)
+    ) throws -> AppConfiguration {
         func require(_ key: String) throws -> String {
             guard let value = environment[key], !value.isEmpty else {
                 throw ConfigurationError.missingEnv(key)
@@ -56,9 +63,9 @@ struct AppConfiguration: Sendable {
             return value
         }
 
-        let accessKeyID = (try? Keychain.readString(account: "AWS_ACCESS_KEY_ID"))
+        let accessKeyID = (try? readKeychain("AWS_ACCESS_KEY_ID"))
             ?? environment["AWS_ACCESS_KEY_ID"]
-        let secretAccessKey = (try? Keychain.readString(account: "AWS_SECRET_ACCESS_KEY"))
+        let secretAccessKey = (try? readKeychain("AWS_SECRET_ACCESS_KEY"))
             ?? environment["AWS_SECRET_ACCESS_KEY"]
 
         guard let accessKeyID, !accessKeyID.isEmpty else {
@@ -76,11 +83,18 @@ struct AppConfiguration: Sendable {
             ? try require("APPLE_COMMANDS_RESULTS_QUEUE_URL")
             : (environment["APPLE_COMMANDS_RESULTS_QUEUE_URL"] ?? "")
 
+        // Required to publish user commands (HU-01b); optional only in local-test mode,
+        // where LoggingUserCommandPublisher replaces the SQS publisher.
+        let userCommandsQueueURL = isLocalTest(environment)
+            ? (environment["USER_COMMANDS_QUEUE_URL"] ?? "")
+            : try require("USER_COMMANDS_QUEUE_URL")
+
         return AppConfiguration(
             awsRegion: (environment["AWS_REGION"]).flatMap { $0.isEmpty ? nil : $0 } ?? "us-east-1",
             syncEventsQueueURL: try require("SYNC_EVENTS_QUEUE_URL"),
             appleCommandsQueueURL: appleCommandsQueueURL,
             appleCommandsResultsQueueURL: appleCommandsResultsQueueURL,
+            userCommandsQueueURL: userCommandsQueueURL,
             baseURL: (environment["SENTINEL_API_BASE_URL"]).flatMap { $0.isEmpty ? nil : $0 } ?? "http://localhost:8080",
             credentials: AWSCredentials(accessKeyID: accessKeyID, secretAccessKey: secretAccessKey)
         )

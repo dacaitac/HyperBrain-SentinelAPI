@@ -32,6 +32,7 @@ final class EventsCRUDTests: XCTestCase {
             eventKit: mock,
             snapshotStore: snapshotStore,
             publisher: publisher,
+            commandPublisher: LoggingUserCommandPublisher(logger: app.logger),
             consumer: nil,
             monitor: monitor,
             loopGuard: loopGuard

@@ -28,6 +28,7 @@ let package = Package(
             dependencies: [
                 .target(name: "SentinelAPI"),
                 .product(name: "XCTVapor", package: "vapor"),
+                .product(name: "VaporTesting", package: "vapor"),
             ],
             path: "Tests/SentinelAPITests"
         ),

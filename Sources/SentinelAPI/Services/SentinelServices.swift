@@ -5,6 +5,9 @@ struct SentinelServices: Sendable {
     let eventKit: any EventKitOperations
     let snapshotStore: SnapshotStore
     let publisher: any EventPublisher
+    /// Sink for user commands (HU-01b): SQS `user-commands.fifo` in production,
+    /// logging in local-test mode.
+    let commandPublisher: any UserCommandPublisher
     /// Nil in local-test mode (no AWS): the Core → Apple command consumer is disabled.
     let consumer: SQSConsumer?
     let monitor: ChangeMonitor

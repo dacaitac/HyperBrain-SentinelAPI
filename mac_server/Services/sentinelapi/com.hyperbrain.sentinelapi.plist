@@ -30,6 +30,9 @@
         <!-- Full URL of apple-commands-results.fifo (outbound results, ADR-010) -->
         <key>APPLE_COMMANDS_RESULTS_QUEUE_URL</key>
         <string>REPLACE_WITH_APPLE_COMMANDS_RESULTS_QUEUE_URL</string>
+        <!-- Full URL of user-commands.fifo (outbound user commands iOS -> Core, HU-01b) -->
+        <key>USER_COMMANDS_QUEUE_URL</key>
+        <string>REPLACE_WITH_USER_COMMANDS_QUEUE_URL</string>
         <!-- Tailscale hostname of Mac Mini — never use IP (can change) -->
         <key>SENTINEL_API_BASE_URL</key>
         <string>REPLACE_WITH_TAILSCALE_HOSTNAME</string>

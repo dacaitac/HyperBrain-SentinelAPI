@@ -1,5 +1,6 @@
 # Swift / Xcode
 .build/
+.build.noindex/
 *.xcodeproj/
 *.xcworkspace/
 xcuserdata/

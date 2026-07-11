@@ -28,12 +28,14 @@ func configure(_ app: Application) async throws {
     let loopGuard = LoopGuard()
 
     let publisher: any EventPublisher
+    let commandPublisher: any UserCommandPublisher
     let consumer: SQSConsumer?
 
     if AppConfiguration.isLocalTest() {
         // Dev machine: log detected changes instead of publishing; no AWS, no command consumer.
         app.logger.warning("SENTINEL_LOCAL_TEST=true — logging changes instead of publishing to SQS")
         publisher = LoggingEventPublisher(logger: app.logger)
+        commandPublisher = LoggingUserCommandPublisher(logger: app.logger)
         consumer = nil
     } else {
         let config = try AppConfiguration.load()
@@ -43,6 +45,7 @@ func configure(_ app: Application) async throws {
         setenv("AWS_REGION", config.awsRegion, 1)
 
         publisher = try await SQSPublisher(region: config.awsRegion, queueURL: config.syncEventsQueueURL)
+        commandPublisher = try await CommandPublisher(region: config.awsRegion, queueURL: config.userCommandsQueueURL)
         if AppConfiguration.isConsumerEnabled() {
             consumer = try await SQSConsumer(
                 region: config.awsRegion,
@@ -70,6 +73,7 @@ func configure(_ app: Application) async throws {
         eventKit: eventKit,
         snapshotStore: snapshotStore,
         publisher: publisher,
+        commandPublisher: commandPublisher,
         consumer: consumer,
         monitor: monitor,
         loopGuard: loopGuard

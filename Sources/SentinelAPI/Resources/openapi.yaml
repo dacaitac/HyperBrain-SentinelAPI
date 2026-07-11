@@ -40,6 +40,37 @@ paths:
       summary: Rebuild the baseline snapshot from EventKit and publish any drift.
       responses:
         "202": { description: Resync accepted }
+  /commands/replan-agenda:
+    post:
+      operationId: triggerReplanAgenda
+      summary: >-
+        Publish a REPLAN_AGENDA user command to the Core via user-commands.fifo (HU-01b).
+        No request body; the server generates a fresh command_id per request.
+      responses:
+        "202":
+          description: Command accepted and published
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommandAccepted" }
+  /commands/sleep-score:
+    post:
+      operationId: submitSleepScore
+      summary: >-
+        Publish a SLEEP_SCORE user command to the Core via user-commands.fifo (HU-01b).
+        The payload date (YYYY-MM-DD) is derived server-side in the Mac Mini timezone —
+        the client only sends the score.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SleepScoreRequest" }
+      responses:
+        "202":
+          description: Command accepted and published
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommandAccepted" }
+        "400": { description: Score outside the integer range 0-100 }
   /reminders:
     get:
       operationId: listReminders
@@ -238,6 +269,23 @@ components:
       required: [id]
       properties:
         id: { type: string, description: EventKit identifier of the affected entity }
+    SleepScoreRequest:
+      type: object
+      required: [score]
+      properties:
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Sleep score on the Core EnergyThresholds scale (integer 0-100)
+    CommandAccepted:
+      type: object
+      required: [command_id]
+      properties:
+        command_id:
+          type: string
+          format: uuid
+          description: Deduplication id of the command published to user-commands.fifo
     LocationPayload:
       type: object
       required: [title, latitude, longitude, radius]
