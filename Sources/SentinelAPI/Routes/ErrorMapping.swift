@@ -6,7 +6,7 @@ extension EventKitService.EventKitError: AbortError {
         switch self {
         case .notFound, .wrongType: return .notFound
         case .accessDenied: return .forbidden
-        case .invalidCalendar, .noDefaultCalendar: return .unprocessableEntity
+        case .invalidCalendar, .noDefaultCalendar, .noWritableSource: return .unprocessableEntity
         }
     }
     var reason: String { description }

@@ -21,12 +21,19 @@ struct EntityRecord: Sendable {
 actor EventKitService {
     private let store = EKEventStore()
 
+    /// Name of the writable EventKit calendar that HyperBrain owns for agenda write-back (HU-01b).
+    /// Agenda blocks arrive as `CALENDAR_EVENT` with `calendar_id == ""` and this name; SentinelAPI
+    /// resolves — or creates, once — a writable calendar with this title so blocks never land in a
+    /// read-only AGENDA calendar (ADR-009) or the user's default calendar.
+    static let managedCalendarName = "HyperBrain"
+
     enum EventKitError: Error, CustomStringConvertible {
         case accessDenied
         case notFound(id: String)
         case wrongType(id: String)
         case invalidCalendar(id: String)
         case noDefaultCalendar
+        case noWritableSource(name: String)
 
         var description: String {
             switch self {
@@ -35,6 +42,8 @@ actor EventKitService {
             case .wrongType(let id): return "Item '\(id)' is not of the expected type"
             case .invalidCalendar(let id): return "No calendar with identifier '\(id)'"
             case .noDefaultCalendar: return "No default calendar available"
+            case .noWritableSource(let name):
+                return "No writable EventKit source to host calendar '\(name)'"
             }
         }
     }
@@ -277,9 +286,30 @@ actor EventKitService {
 
     private func eventCalendar(id: String, name: String? = nil) throws -> EKCalendar {
         if let calendar = store.calendar(withIdentifier: id) { return calendar }
-        if let byName = calendar(named: name, for: .event) { return byName }
+        // A named calendar (e.g. the HyperBrain agenda calendar, HU-01b) that the Core references by
+        // name rather than by id: reuse an existing writable one, otherwise create it once on a
+        // writable source. Falls back to the user's default only when no name is given (HU-09c).
+        if let name, !name.isEmpty {
+            return try resolveOrCreateEventCalendar(named: name)
+        }
         guard let fallback = store.defaultCalendarForNewEvents else { throw EventKitError.noDefaultCalendar }
         return fallback
+    }
+
+    /// Resolves the writable event calendar with the given title, creating it once if absent so
+    /// agenda blocks (HU-01b) always land in HyperBrain's own calendar — never a read-only AGENDA
+    /// calendar (ADR-009) nor the user's default. Idempotent: a matching writable calendar is
+    /// reused, so repeated commands never spawn duplicates.
+    private func resolveOrCreateEventCalendar(named name: String) throws -> EKCalendar {
+        if let existing = calendar(named: name, for: .event) { return existing }
+        guard let source = writableSource(supporting: .event) else {
+            throw EventKitError.noWritableSource(name: name)
+        }
+        let calendar = EKCalendar(for: .event, eventStore: store)
+        calendar.title = name
+        calendar.source = source
+        try store.saveCalendar(calendar, commit: true)
+        return calendar
     }
 
     private func calendar(named name: String?, for entityType: EKEntityType) -> EKCalendar? {
@@ -296,6 +326,24 @@ actor EventKitService {
             ? store.defaultCalendarForNewReminders()?.source
             : store.defaultCalendarForNewEvents?.source
         return capable.first { $0.title == name } ?? defaultSource ?? capable.first
+    }
+
+    /// Picks a writable EventKit source to host a newly created calendar, preferring iCloud (so the
+    /// HyperBrain calendar syncs across Daniel's devices), then a local source. Only sources that
+    /// already host calendars of the requested type are considered — a CalDAV source may reject a
+    /// mismatched entity type (EKErrorDomain code 24). The choice of source (iCloud vs local) is a
+    /// reserved account decision; iCloud is the default and must be reported if it needs changing.
+    private func writableSource(supporting entityType: EKEntityType) -> EKSource? {
+        let capable = store.sources.filter { !$0.calendars(for: entityType).isEmpty }
+        if let icloud = capable.first(where: { $0.sourceType == .calDAV && $0.title == "iCloud" }) {
+            return icloud
+        }
+        if let anyCalDAV = capable.first(where: { $0.sourceType == .calDAV }) { return anyCalDAV }
+        if let local = capable.first(where: { $0.sourceType == .local }) { return local }
+        let defaultSource = entityType == .reminder
+            ? store.defaultCalendarForNewReminders()?.source
+            : store.defaultCalendarForNewEvents?.source
+        return defaultSource ?? capable.first
     }
 
     func defaultReminderCalendarIdentifier() -> String? {
